@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 public class CsvUnionGroups {
     private static final String INPUT_FILE = "/home/otricala/javaCode/UnoSoftTest/lng-big.csv";
     private static final String OUTPUT_FILE = "out.txt";
-    // regex: lines like "...";"...";...
     private static final Pattern LINE_PATTERN = Pattern.compile(
             "^(?:\"[^\"]*\"|[^\";]*)(?:;(?:\"[^\"]*\"|[^\";]*))*$"
     );
@@ -39,7 +38,6 @@ public class CsvUnionGroups {
         DSU dsu = new DSU(n);
         Map<String,Integer> firstOccurrence = new HashMap<>();
 
-        // 3) строим объединения
         for (int i = 0; i < n; i++) {
             String[] cols = validLines.get(i).split(";", -1);
             for (int col = 0; col < cols.length; col++) {
