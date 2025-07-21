@@ -8,7 +8,6 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 public class CsvUnionGroups {
-    private static final String INPUT_FILE = "/home/otricala/javaCode/UnoSoftTest/lng-big.csv";
     private static final String OUTPUT_FILE = "out.txt";
     private static final Pattern LINE_PATTERN = Pattern.compile(
             "^(?:\"[^\"]*\"|[^\";]*)(?:;(?:\"[^\"]*\"|[^\";]*))*$"
@@ -17,9 +16,14 @@ public class CsvUnionGroups {
 
     public static void main(String[] args) throws IOException {
 
-        Instant t0 = Instant.now();
-        List<String> rawLines = Files.readAllLines(Paths.get(INPUT_FILE), StandardCharsets.UTF_8);
+        if (args.length != 1) {
+            System.err.println("Usage: java -jar csv-union-groups.jar <path-to-input-file>");
+            System.exit(1);
+        }
+        String inputPath = args[0];
 
+        Instant t0 = Instant.now();
+        List<String> rawLines = Files.readAllLines(Paths.get(inputPath), StandardCharsets.UTF_8);
 
         List<String> validLines = new ArrayList<>();
         for (String line : rawLines) {
