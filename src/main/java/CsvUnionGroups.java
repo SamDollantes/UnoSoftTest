@@ -17,7 +17,7 @@ public class CsvUnionGroups {
     public static void main(String[] args) throws IOException {
 
         if (args.length != 1) {
-            System.err.println("Usage: java -jar csv-union-groups.jar <path-to-input-file>");
+            System.err.println("Usage: java -jar <NameOfFile>.jar <path-to-input-file>");
             System.exit(1);
         }
         String inputPath = args[0];
