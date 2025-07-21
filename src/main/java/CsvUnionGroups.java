@@ -3,7 +3,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -13,78 +12,102 @@ public class CsvUnionGroups {
             "^(?:\"[^\"]*\"|[^\";]*)(?:;(?:\"[^\"]*\"|[^\";]*))*$"
     );
 
-
     public static void main(String[] args) throws IOException {
-
         if (args.length != 1) {
             System.err.println("Usage: java -jar <NameOfFile>.jar <path-to-input-file>");
             System.exit(1);
         }
-        String inputPath = args[0];
+        Path input = Paths.get(args[0]);
+        if (!Files.exists(input) || !Files.isReadable(input)) {
+            System.err.println("File not found or unreadable: " + input);
+            System.exit(1);
+        }
 
         Instant t0 = Instant.now();
-        List<String> rawLines = Files.readAllLines(Paths.get(inputPath), StandardCharsets.UTF_8);
 
-        List<String> validLines = new ArrayList<>();
-        for (String line : rawLines) {
-            if (LINE_PATTERN.matcher(line).matches()) {
-                validLines.add(line);
-
+        // 1) Подсчёт валидных строк
+        long validCount;
+        try (BufferedReader reader = Files.newBufferedReader(input, StandardCharsets.UTF_8)) {
+            validCount = 0;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (LINE_PATTERN.matcher(line).matches()) {
+                    validCount++;
+                }
             }
         }
-        int n = validLines.size();
-
+        int n = (int) validCount;
         if (n == 0) {
             System.out.println(0);
             return;
         }
 
         DSU dsu = new DSU(n);
-        Map<String,Integer> firstOccurrence = new HashMap<>();
-
-        for (int i = 0; i < n; i++) {
-            String[] cols = validLines.get(i).split(";", -1);
-            for (int col = 0; col < cols.length; col++) {
-                String token = cols[col];
-                if ("\"\"".equals(token) || token.isEmpty()) continue;
-                String key = col + token;
-                Integer prev = firstOccurrence.get(key);
-                if (prev == null) {
-                    firstOccurrence.put(key, i);
-                } else {
-                    dsu.union(i, prev);
+        Map<String, Integer> firstOccurrence = new HashMap<>(n * 2);
+        try (BufferedReader reader = Files.newBufferedReader(input, StandardCharsets.UTF_8)) {
+            String line;
+            int id = 0;
+            while ((line = reader.readLine()) != null) {
+                if (!LINE_PATTERN.matcher(line).matches()) continue;
+                String[] cols = line.split(";", -1);
+                for (int col = 0; col < cols.length; col++) {
+                    String raw = cols[col];
+                    if (raw.startsWith("\"") && raw.endsWith("\"") && raw.length() > 1) {
+                        raw = raw.substring(1, raw.length() - 1);
+                    }
+                    if (raw.isEmpty()) continue;
+                    String key = col + "|" + raw;
+                    Integer prev = firstOccurrence.putIfAbsent(key, id);
+                    if (prev != null) {
+                        dsu.union(id, prev);
+                    }
                 }
+                id++;
             }
         }
 
-        Map<Integer, List<String>> groups = new HashMap<>();
+        Map<Integer, List<Integer>> groups = new HashMap<>();
         for (int i = 0; i < n; i++) {
             int root = dsu.find(i);
-            groups.computeIfAbsent(root, k -> new ArrayList<>()).add(validLines.get(i));
+            groups.computeIfAbsent(root, k -> new ArrayList<>()).add(i);
         }
-
-        List<List<String>> result = new ArrayList<>(groups.values());
+        List<List<Integer>> result = new ArrayList<>();
+        for (List<Integer> g : groups.values()) {
+            if (g.size() > 1) result.add(g);
+        }
         result.sort((a, b) -> Integer.compare(b.size(), a.size()));
 
-        int countNonSingleton = 0;
-        try (BufferedWriter out = Files.newBufferedWriter(Paths.get(OUTPUT_FILE), StandardCharsets.UTF_8)) {
-            for (List<String> group : result) {
-                out.write(String.valueOf(group.size()));
-                out.newLine();
-                if (group.size() > 1) {
-                    countNonSingleton++;
-                }
-                for (String row : group) {
-                    out.write(row);
-                    out.newLine();
-                }
-                out.newLine();
+        int[] idToGroup = new int[n];
+        Arrays.fill(idToGroup, -1);
+        for (int gi = 0; gi < result.size(); gi++) {
+            for (int idx : result.get(gi)) {
+                idToGroup[idx] = gi;
             }
         }
-        LocalDate end = LocalDate.now();
+
+        int countNonSingleton = result.size();
+        try (BufferedReader reader = Files.newBufferedReader(input, StandardCharsets.UTF_8);
+             BufferedWriter out = Files.newBufferedWriter(Paths.get(OUTPUT_FILE), StandardCharsets.UTF_8)) {
+
+            String line;
+            int id = 0;
+            boolean[] headerWritten = new boolean[result.size()];
+            while ((line = reader.readLine()) != null) {
+                if (!LINE_PATTERN.matcher(line).matches()) continue;
+                int gi = idToGroup[id++];
+                if (gi >= 0) {
+                    if (!headerWritten[gi]) {
+                        out.write(String.valueOf(result.get(gi).size()));
+                        out.newLine();
+                        headerWritten[gi] = true;
+                    }
+                    out.write(line);
+                    out.newLine();
+                }
+            }
+        }
 
         Duration elapsed = Duration.between(t0, Instant.now());
-
         System.out.println(elapsed.toSeconds());
         System.out.println(countNonSingleton);
     }
@@ -104,13 +127,13 @@ public class CsvUnionGroups {
         public void union(int x, int y) {
             int rx = find(x), ry = find(y);
             if (rx == ry) return;
-            if (rank[rx] == rank[ry]) {
-                rank[rx]++;
-                parent[ry] = rx;
+            if (rank[rx] < rank[ry]) {
+                parent[rx] = ry;
             } else if (rank[rx] > rank[ry]) {
                 parent[ry] = rx;
             } else {
-                parent[rx] = ry;
+                parent[ry] = rx;
+                rank[rx]++;
             }
         }
     }
